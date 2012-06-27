@@ -1,0 +1,84 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="ko" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>Inground API Test</title>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.7.2.min.js"></script>
+</head>
+<body>
+<script type="text/javascript" src="http://openapi.map.naver.com/openapi/naverMap.naver?ver=2.0&key=519c697d875130767d965dae24480145"></script>
+<div id="map" style="border:1px solid #ccc;"></div>
+<script type="text/javascript">
+var oMap = null;
+var url = '/';
+var doLogin = function() {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		dataType: 'json',
+		data: JSON.stringify({
+			kind: "login",
+			account: $('#account').attr('value')
+		})
+	}).done(function(xhr) {
+		alert('login done');
+	}).fail(function(xhr) {
+		var json = $.parseJSON(xhr.responseText);
+		alert('login fail : ' + json.message);
+	});
+};
+var doMap = function() {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		dataType: 'json',
+		data: JSON.stringify({
+			kind: "map"
+		})
+	}).done(function(data) {
+		var lat_min = 90, lat_max = -90, lng_min = 180, lng_max = -180;
+		for(var i = 0; i < data.map.length; i++) {
+			var lat = data.map[i][0], lng = data.map[i][1];
+			if(lat < lat_min) lat_min = lat;
+			else if(lat > lat_max) lat_max = lat;
+			if(lng < lng_min) lng_min = lng;
+			else if(lng > lng_max) lng_max = lng;
+		}
+		var boundary = [new nhn.api.map.LatLng(lat_min, lng_min),
+						new nhn.api.map.LatLng(lat_max, lng_max)];
+		var oMap = new nhn.api.map.Map(document.getElementById('map'), {
+			boundary: boundary,
+			boundaryOffset: 0,
+			enableDblClickZoom : false,
+			mapMode : 0,
+			activateTrafficMap : false,
+			activateBicycleMap : false,
+			minMaxLevel : [ 11, 14 ],
+			size : new nhn.api.map.Size(800, 480)
+		});
+		for(var i = 0; i < data.map.length; i++) {
+			var circle = new nhn.api.map.Circle({
+				strokeColor : "red",
+				strokeOpacity : 1,
+				strokeWidth : 1,
+				fillColor : "none",
+				radius : 1
+			});
+			circle.setCenterPoint(new nhn.api.map.LatLng(data.map[i][0], data.map[i][1]));
+			oMap.addOverlay(circle);
+		}
+	}).fail(function(xhr) {
+		var json = $.parseJSON(xhr.responseText);
+		alert('login fail : ' + json.message);
+	});
+};
+$(document).ready(function() {
+	$('#bLogin').click(doLogin);
+	$('#bMap').click(doMap);
+});
+</script>
+<input id="account" type="text" />
+<button id="bLogin" type="button">login</button>
+<button id="bMap" type="button">map</button>
+</body>
+</html>
