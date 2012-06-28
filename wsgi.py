@@ -48,7 +48,8 @@ class Inground:
 		self._response = Response(start_response)
 		self._routine = {
 			'map': self._map,
-			'start': self._start
+			'start': self._start,
+			'poll': self._poll
 		}
 
 	def _parse(self):
@@ -91,7 +92,29 @@ class Inground:
 		initial_area = inground_map.start(self._session['account'], self._content['location'])
 		if not initial_area:
 			return self._response.done('start', {'success': False})
+
+		sessions = inground_db.session.find()
+		for session in sessions:
+			account = session['account']
+			inground_db.poll.insert({
+				'account': account,
+				'kind': 'ground',
+				'data': {
+					'account': self._session['account'],
+					'ground': initial_area
+				}
+			})
 		return self._response.done('start', {'success': True})
+
+	def _poll(self):
+		for trial in xrange(30):
+			poll = inground_db.poll.find_one({'account': self._session['account']})
+			if poll is None:
+				gevent.sleep(1)
+			else:
+				inground_db.poll.remove(poll)
+				return self._response.done(poll['kind'], poll['data'])
+		return self._response.done('poll', {})
 
 	def run(self):
 		path = self._environ.get('PATH_INFO', '')

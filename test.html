@@ -12,7 +12,10 @@
 var oMap = null;
 var oMarker = null;
 var map = [];
+var accounts = [];
+var colors = ['#ff0000', '#0000ff', '#00ff00', '#00ffff', '#ffff00', '#ff00ff'];
 var url = '/';
+var playing = false;
 var doLogin = function() {
 	$.ajax({
 		type: 'POST',
@@ -98,6 +101,10 @@ var doMap = function() {
 	});
 };
 var doStart = function() {
+	if(playing) {
+		alert('already started');
+		return;
+	}
 	$.ajax({
 		type: 'POST',
 		url: url,
@@ -109,11 +116,44 @@ var doStart = function() {
 	}).done(function(data) {
 		alert(data.success);
 		if(data.success) {
-			// TODO: polling 시작
+			playing = true;
+			accounts = [];
+			setTimeout('doPoll();', 100);
 		}
 	}).fail(function(xhr) {
 		var json = $.parseJSON(xhr.responseText);
 		alert('start fail : ' + json.message);
+	});
+};
+var doPoll = function() {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		dataType: 'json',
+		data: JSON.stringify({
+			kind: "poll"
+		})
+	}).done(function(data) {
+		if(data.kind == 'ground') {
+			var index = accounts.indexOf(data.account);
+			if(index < 0) {
+				accounts.push(data.account);
+				index = accounts.length - 1;
+			}
+			for(var i = 0; i < data.ground.length; i++) {
+				map[data.ground[i]].setStyle('fillColor', colors[index])
+			}
+		}else if(data.kind == 'finish') {
+			playing = false;
+			alert('finish');
+		}
+	}).fail(function(xhr) {
+		var json = $.parseJSON(xhr.responseText);
+		alert('poll fail : ' + json.message);
+	}).always(function() {
+		if(playing) {
+			setTimeout('doPoll();', 100);
+		}
 	});
 };
 $(document).ready(function() {
