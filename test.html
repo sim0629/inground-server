@@ -7,10 +7,9 @@
 </head>
 <body>
 <script type="text/javascript" src="http://openapi.map.naver.com/openapi/naverMap.naver?ver=2.0&key=519c697d875130767d965dae24480145"></script>
-<div id="map" style="border:1px solid #ccc;"></div>
 <script type="text/javascript">
 var oMap = null;
-var oMarker = null;
+var oMarkerMe = null;
 var map = [];
 var accounts = [];
 var colors = ['#ff0000', '#0000ff', '#00ff00', '#00ffff', '#ffff00', '#ff00ff'];
@@ -22,10 +21,10 @@ var doLogin = function() {
 		url: url,
 		dataType: 'json',
 		data: JSON.stringify({
-			kind: "login",
+			kind: 'login',
 			account: $('#account').attr('value')
 		})
-	}).done(function(xhr) {
+	}).done(function(data) {
 		alert('login done');
 	}).fail(function(xhr) {
 		var json = $.parseJSON(xhr.responseText);
@@ -38,7 +37,7 @@ var doMap = function() {
 		url: url,
 		dataType: 'json',
 		data: JSON.stringify({
-			kind: "map"
+			kind: 'map'
 		})
 	}).done(function(data) {
 		var lat_min = 90, lat_max = -90, lng_min = 180, lng_max = -180;
@@ -66,7 +65,7 @@ var doMap = function() {
 		// - 따라서 Sprite Icon 을 사용하기 위해 기본적으로 사용되는 값을 지정한다.
 		// - Sprite Icon 을 사용하기 위해서 상세한 내용은 레퍼런스 페이지의 nhn.api.map.SpriteIcon 객체를 참조하면 된다.
 		var testdefaultSpriteIcon = {
-			url : "http://static.naver.com/maps2/icons/pin_spot2.png",
+			url : 'http://static.naver.com/maps2/icons/pin_spot2.png',
 			size : {width:28, height:37},
 			spriteSize : {width:28, height:37},
 			imgOrder : 0,
@@ -74,22 +73,22 @@ var doMap = function() {
 		};
 		// - 위에서 지정한 기본값을 이용해 실제로 SpriteIcon 을 생성한다.
 		var testDupSpriteIcon_first = new nhn.api.map.SpriteIcon(testdefaultSpriteIcon.url, testdefaultSpriteIcon.size, testdefaultSpriteIcon.spriteSize, 0, testdefaultSpriteIcon.offset);
-		oMarker = new nhn.api.map.DraggableMarker(testDupSpriteIcon_first, {
+		oMarkerMe = new nhn.api.map.DraggableMarker(testDupSpriteIcon_first, {
 			title : 'me',
 			point : oMap.getCenter(),
 			zIndex : 1,
 			smallSrc : testDupSpriteIcon_first
 		});
-		oMap.addOverlay(oMarker);
+		oMap.addOverlay(oMarkerMe);
 
 		map = [];
 		for(var i = 0; i < data.map.length; i++) {
 			var circle = new nhn.api.map.Circle({
-				strokeColor : "#cccccc",
+				strokeColor : '#cccccc',
 				strokeOpacity : 1,
 				strokeWidth : 1,
-				fillColor : "none",
-				radius : 1
+				fillColor : 'none',
+				radius : 1.5
 			});
 			circle.setCenterPoint(new nhn.api.map.LatLng(data.map[i][0], data.map[i][1]));
 			oMap.addOverlay(circle);
@@ -110,11 +109,11 @@ var doStart = function() {
 		url: url,
 		dataType: 'json',
 		data: JSON.stringify({
-			kind: "start",
-			location: [oMarker.getPoint().getY(), oMarker.getPoint().getX()]
+			kind: 'start',
+			location: [oMarkerMe.getPoint().getY(), oMarkerMe.getPoint().getX()]
 		})
 	}).done(function(data) {
-		alert(data.success);
+		alert('start : ' + data.success);
 		if(data.success) {
 			playing = true;
 			accounts = [];
@@ -125,13 +124,29 @@ var doStart = function() {
 		alert('start fail : ' + json.message);
 	});
 };
+var doGrab = function() {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		dataType: 'json',
+		data: JSON.stringify({
+			kind: 'grab',
+			location: [oMarkerMe.getPoint().getY(), oMarkerMe.getPoint().getX()]
+		})
+	}).done(function(data) {
+		alert('grab : ' + data.success);
+	}).fail(function(xhr) {
+		var json = $.parseJSON(xhr.responseText);
+		alert('grab fail : ' + json.message);
+	});
+};
 var doPoll = function() {
 	$.ajax({
 		type: 'POST',
 		url: url,
 		dataType: 'json',
 		data: JSON.stringify({
-			kind: "poll"
+			kind: 'poll'
 		})
 	}).done(function(data) {
 		if(data.kind == 'ground') {
@@ -160,11 +175,14 @@ $(document).ready(function() {
 	$('#bLogin').click(doLogin);
 	$('#bMap').click(doMap);
 	$('#bStart').click(doStart);
+	$('#bGrab').click(doGrab);
 });
 </script>
 <input id="account" type="text" />
 <button id="bLogin" type="button">login</button>
 <button id="bMap" type="button">map</button>
 <button id="bStart" type="button">start</button>
+<button id="bGrab" type="button">grab</button>
+<div id="map"></div>
 </body>
 </html>

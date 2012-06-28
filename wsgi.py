@@ -49,6 +49,7 @@ class Inground:
 		self._routine = {
 			'map': self._map,
 			'start': self._start,
+			'grab': self._grab,
 			'poll': self._poll
 		}
 
@@ -105,6 +106,29 @@ class Inground:
 				}
 			})
 		return self._response.done('start', {'success': True})
+
+	def _grab(self):
+		if 'location' not in self._content:
+			return self._response.fail('no location')
+		location = self._content['location']
+		account = self._session['account']
+		stones = inground_db.stone.find({'account': account})
+		if stones.count() == 0: # 첫번째라서 자기땅이면 됨
+			if inground_map.is_mine(account, location):
+				inground_db.stone.insert({
+					'account': account,
+					'location': location
+				})
+				return self._response.done('grab', {'success': True})
+			else:
+				return self._response.done('grab', {'success': False})
+		else: # 직전 위치에서 됨
+			return self._response.done('grab', {
+				'success': inground_map.is_same(
+					stones[stones.count() - 1]['location'],
+					location
+				)
+			})
 
 	def _poll(self):
 		for trial in xrange(30):
@@ -267,6 +291,18 @@ class Map:
 
 	def info(self):
 		return [self._coord_helper.virtual2real(v) for v in self._info]
+
+	def is_mine(self, who, v):
+		return self._is_mine(who, self._coord_helper.real2virtual(v))
+	def _is_mine(self, who, v):
+		if v[0] < 0 or v[0] >= self._x or\
+			v[1] < 0 or v[1] >= self._y:
+			return False
+		return self._get(v) == who
+	
+	def is_same(self, v, w):
+		return self._coord_helper.real2virtual(v) ==\
+				self._coord_helper.real2virtual(w)
 
 	def start(self, who, v):
 		return self._start(who, self._coord_helper.real2virtual(v))
