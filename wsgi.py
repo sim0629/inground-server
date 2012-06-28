@@ -98,6 +98,18 @@ class Inground:
 				}
 			})
 
+	def _enqueue_finish(self, area_index):
+		sessions = inground_db.session.find()
+		for session in sessions:
+			account = session['account']
+			inground_db.poll.insert({
+				'account': account,
+				'kind': 'finish',
+				'data': {
+					'result': inground_map.get_result()
+				}
+			})
+
 	def _map(self):
 		return self._response.done('map', {'map': inground_map.info()})
 
@@ -156,12 +168,15 @@ class Inground:
 			velocity)
 		if success:
 			if stones.count() == 3:
+				inground_semaphore.acquire()
 				changed_area_index = inground_map.invade(account, [
 					s['location'] for s in list(stones)
 				] + [location])
-				print changed_area_index
 				self._enqueue_ground(changed_area_index)
 				inground_db.stone.remove({'account': account})
+				if inground_map.is_finished():
+					self._enqueue_finish()
+				inground_semaphore.release()
 			else:
 				inground_db.stone.insert({
 					'account': account,
@@ -262,7 +277,6 @@ class Map:
 		self.PATH = 2
 		self.FLAG = 3
 
-		self._sem = gevent.coros.BoundedSemaphore()
 
 		self._coord_helper = CoordHelper(bound)
 		
@@ -272,8 +286,10 @@ class Map:
 		
 		self._map = [[{} for y in xrange(self._y)] for x in xrange(self._x)]
 
+		self._nofcells = {}
 		self._set('inground', bound_v[0])
 		self._info = self._invade('inground', bound_v + [bound_v[0]])
+		self._totalcells = len(self._info)
 		i = 0
 		for v in self._info:
 			self._map[v[0]][v[1]]['index'] = i
@@ -283,7 +299,14 @@ class Map:
 		return self._map[v[0]][v[1]]['account']
 
 	def _set(self, who, v):
-		self._map[v[0]][v[1]]['account'] = who
+		if who not in self._nofcells:
+			self._nofcells[who] = 0
+		cell = self._map[v[0]][v[1]]
+		if 'account' in cell:
+			prev_who = cell['account']
+			self._nofcells[prev_who] = self._nofcells[prev_who] - 1
+		cell['account'] = who
+		self._nofcells[who] = self._nofcells[who] + 1
 
 	def _path_one(self, temp_map, from_v, to_v, by_x = True): # Bresenham
 		if by_x:
@@ -351,6 +374,19 @@ class Map:
 		return self._coord_helper.real2virtual(v) ==\
 				self._coord_helper.real2virtual(w)
 
+	def is_finished(self):
+		print self._nofcells
+		print self._totalcells
+		return float(self._nofcells['inground']) / self._totalcells < 0.4
+	
+	def get_result(self):
+		result = []
+		for key in self._nofcells.keys():
+			if key == 'inground':
+				continue
+			result.append({'account': key, 'nofcells': self._nofcells[key]})
+		return result
+
 	def start(self, who, v):
 		return self._start(who, self._coord_helper.real2virtual(v))
 	def _start(self, who, v):
@@ -389,15 +425,12 @@ class Map:
 											for v in path])
 		]
 	def _invade(self, who, path):
-		print path
 		if len(path) < 1:
 			raise ValueError('invalid path')
 
 		if self._get(path[0]) != who or\
 			self._get(path[-1]) != who:
 			return []
-
-		self._sem.acquire()
 
 		temp_map = [[self.MINE if 'account' in v and v['account'] == who else self.NONE for v in l] for l in self._map]
 		
@@ -453,8 +486,6 @@ class Map:
 					if not is_outside:
 						changed_area = changed_area + flagged
 
-		self._sem.release()
-
 		if changed_area:
 			changed_area = changed_path + changed_area
 	
@@ -482,6 +513,8 @@ inground_map = Map([
 	[37.460264725208205, 126.9568544626236],
 	[37.45958980654367, 126.95714950561523]
 ]) # 버들골
+
+inground_semaphore = gevent.coros.BoundedSemaphore()
 
 if __name__ == '__main__':
 	connection = pymongo.Connection()
