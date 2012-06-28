@@ -10,6 +10,8 @@
 <div id="map" style="border:1px solid #ccc;"></div>
 <script type="text/javascript">
 var oMap = null;
+var oMarker = null;
+var map = [];
 var url = '/';
 var doLogin = function() {
 	$.ajax({
@@ -46,7 +48,7 @@ var doMap = function() {
 		}
 		var boundary = [new nhn.api.map.LatLng(lat_min, lng_min),
 						new nhn.api.map.LatLng(lat_max, lng_max)];
-		var oMap = new nhn.api.map.Map(document.getElementById('map'), {
+		oMap = new nhn.api.map.Map(document.getElementById('map'), {
 			boundary: boundary,
 			boundaryOffset: 0,
 			enableDblClickZoom : false,
@@ -56,9 +58,31 @@ var doMap = function() {
 			minMaxLevel : [ 11, 14 ],
 			size : new nhn.api.map.Size(800, 480)
 		});
+
+		// - Draggable Marker 의 경우 Icon 인자는 Sprite Icon이 된다.
+		// - 따라서 Sprite Icon 을 사용하기 위해 기본적으로 사용되는 값을 지정한다.
+		// - Sprite Icon 을 사용하기 위해서 상세한 내용은 레퍼런스 페이지의 nhn.api.map.SpriteIcon 객체를 참조하면 된다.
+		var testdefaultSpriteIcon = {
+			url : "http://static.naver.com/maps2/icons/pin_spot2.png",
+			size : {width:28, height:37},
+			spriteSize : {width:28, height:37},
+			imgOrder : 0,
+			offset : {width:14, height:37}
+		};
+		// - 위에서 지정한 기본값을 이용해 실제로 SpriteIcon 을 생성한다.
+		var testDupSpriteIcon_first = new nhn.api.map.SpriteIcon(testdefaultSpriteIcon.url, testdefaultSpriteIcon.size, testdefaultSpriteIcon.spriteSize, 0, testdefaultSpriteIcon.offset);
+		oMarker = new nhn.api.map.DraggableMarker(testDupSpriteIcon_first, {
+			title : 'me',
+			point : oMap.getCenter(),
+			zIndex : 1,
+			smallSrc : testDupSpriteIcon_first
+		});
+		oMap.addOverlay(oMarker);
+
+		map = [];
 		for(var i = 0; i < data.map.length; i++) {
 			var circle = new nhn.api.map.Circle({
-				strokeColor : "red",
+				strokeColor : "#cccccc",
 				strokeOpacity : 1,
 				strokeWidth : 1,
 				fillColor : "none",
@@ -66,19 +90,41 @@ var doMap = function() {
 			});
 			circle.setCenterPoint(new nhn.api.map.LatLng(data.map[i][0], data.map[i][1]));
 			oMap.addOverlay(circle);
+			map.push(circle);
 		}
 	}).fail(function(xhr) {
 		var json = $.parseJSON(xhr.responseText);
 		alert('login fail : ' + json.message);
 	});
 };
+var doStart = function() {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		dataType: 'json',
+		data: JSON.stringify({
+			kind: "start",
+			location: [oMarker.getPoint().getY(), oMarker.getPoint().getX()]
+		})
+	}).done(function(data) {
+		alert(data.success);
+		if(data.success) {
+			// TODO: polling 시작
+		}
+	}).fail(function(xhr) {
+		var json = $.parseJSON(xhr.responseText);
+		alert('start fail : ' + json.message);
+	});
+};
 $(document).ready(function() {
 	$('#bLogin').click(doLogin);
 	$('#bMap').click(doMap);
+	$('#bStart').click(doStart);
 });
 </script>
 <input id="account" type="text" />
 <button id="bLogin" type="button">login</button>
 <button id="bMap" type="button">map</button>
+<button id="bStart" type="button">start</button>
 </body>
 </html>

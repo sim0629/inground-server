@@ -47,7 +47,8 @@ class Inground:
 		self._environ = environ
 		self._response = Response(start_response)
 		self._routine = {
-			'map': self._map
+			'map': self._map,
+			'start': self._start
 		}
 
 	def _parse(self):
@@ -83,6 +84,14 @@ class Inground:
 
 	def _map(self):
 		return self._response.done('map', {'map': inground_map.info()})
+
+	def _start(self):
+		if 'location' not in self._content:
+			return self._response.fail('no location')
+		initial_area = inground_map.start(self._session['account'], self._content['location'])
+		if not initial_area:
+			return self._response.done('start', {'success': False})
+		return self._response.done('start', {'success': True})
 
 	def run(self):
 		path = self._environ.get('PATH_INFO', '')
@@ -123,7 +132,7 @@ class Inground:
 
 class CoordHelper:
 	def __init__(self, bound):
-		self._precision = 0.00001
+		self._precision = 0.00003
 		
 		bound_lat = [v[0] for v in bound]
 		bound_lng = [v[1] for v in bound]
@@ -171,16 +180,16 @@ class Map:
 		self._x = max([v[0] for v in bound_v]) + 1
 		self._y = max([v[1] for v in bound_v]) + 1
 		
-		self._map = [[0 for y in xrange(self._y)] for x in xrange(self._x)]
+		self._map = [[{} for y in xrange(self._y)] for x in xrange(self._x)]
 
 		self._set('inground', bound_v[0])
-		self._info = self.invade('inground', bound_v + [bound_v[0]])
+		self._info = self._invade('inground', bound_v + [bound_v[0]])
 
 	def _get(self, v):
-		return self._map[v[0]][v[1]]
+		return self._map[v[0]][v[1]]['account']
 
 	def _set(self, who, v):
-		self._map[v[0]][v[1]] = who
+		self._map[v[0]][v[1]]['account'] = who
 
 	def _path_one(self, temp_map, from_v, to_v, by_x = True): # Bresenham
 		if by_x:
@@ -236,7 +245,31 @@ class Map:
 	def info(self):
 		return [self._coord_helper.virtual2real(v) for v in self._info]
 
+	def start(self, who, v):
+		return self._start(who, self._coord_helper.real2virtual(v))
+	def _start(self, who, v):
+		x = v[0]
+		y = v[1]
+		if x < 1 or x >= self._x - 1 or\
+			y < 1 or y >= self._y - 1:
+			return []
+		initial_area_v = []
+		initial_area_index = []
+		for i in xrange(-1, 2):
+			for j in xrange(-1, 2):
+				m = self._map[x + i][y + j]
+				if 'account' not in m or\
+					m['account'] != 'inground':
+					return []
+				initial_area_v.append([x + i, y + j])
+				initial_area_index.append(m['index'])
+		for v in initial_area_v:
+			self._set(who, v)
+		return initial_area_index
+
 	def invade(self, who, path):
+		return self._invade(who, [self._coord_helper.real2virtual(v) for v in path])
+	def _invade(self, who, path):
 		if len(path) < 1:
 			raise ValueError('invalid path')
 
@@ -246,7 +279,7 @@ class Map:
 
 		self._sem.acquire()
 
-		temp_map = [[self.MINE if v == who else self.NONE for v in l] for l in self._map]
+		temp_map = [[self.MINE if 'account' in v and v['account'] == who else self.NONE for v in l] for l in self._map]
 		changed_path = self._path(temp_map, path)
 		changed_area = []
 		q = Queue.Queue()
@@ -302,9 +335,12 @@ class Map:
 
 		if changed_area:
 			changed_area = changed_path + changed_area
-		
+	
+		i = 0
 		for v in changed_area:
-			self._map[v[0]][v[1]] = who
+			self._set(who, v)
+			self._map[v[0]][v[1]]['index'] = i
+			i = i + 1
 
 		return changed_area
 
