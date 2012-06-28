@@ -50,6 +50,7 @@ class Inground:
 			'map': self._map,
 			'start': self._start,
 			'grab': self._grab,
+			'throw': self._throw,
 			'poll': self._poll
 		}
 
@@ -84,16 +85,7 @@ class Inground:
 		inground_db.session.insert(self._session)
 		return self._response.login(session_id)
 
-	def _map(self):
-		return self._response.done('map', {'map': inground_map.info()})
-
-	def _start(self):
-		if 'location' not in self._content:
-			return self._response.fail('no location')
-		initial_area = inground_map.start(self._session['account'], self._content['location'])
-		if not initial_area:
-			return self._response.done('start', {'success': False})
-
+	def _enqueue_ground(self, area_index):
 		sessions = inground_db.session.find()
 		for session in sessions:
 			account = session['account']
@@ -102,9 +94,22 @@ class Inground:
 				'kind': 'ground',
 				'data': {
 					'account': self._session['account'],
-					'ground': initial_area
+					'ground': area_index
 				}
 			})
+
+	def _map(self):
+		return self._response.done('map', {'map': inground_map.info()})
+
+	def _start(self):
+		if 'location' not in self._content:
+			return self._response.fail('no location')
+		initial_area_index = inground_map.start(self._session['account'], self._content['location'])
+		if not initial_area_index:
+			return self._response.done('start', {'success': False})
+
+		self._enqueue_ground(initial_area_index)
+
 		return self._response.done('start', {'success': True})
 
 	def _grab(self):
@@ -117,18 +122,56 @@ class Inground:
 			if inground_map.is_mine(account, location):
 				inground_db.stone.insert({
 					'account': account,
-					'location': location
+					'location': location,
+					'onground': False
 				})
 				return self._response.done('grab', {'success': True})
 			else:
 				return self._response.done('grab', {'success': False})
 		else: # 직전 위치에서 됨
+			stone = stones[stones.count() - 1]
+			if not stone['onground']:
+				return self._response.fail('throw first')
+			success = inground_map.is_same(
+						stone['location'],
+						location)
+			if success:
+				inground_db.stone.update(stone, {'$set': {'onground': False}})
 			return self._response.done('grab', {
-				'success': inground_map.is_same(
-					stones[stones.count() - 1]['location'],
-					location
-				)
+				'success': success,
+				'location': location
 			})
+
+	def _throw(self):
+		if 'velocity' not in self._content:
+			return self._response.fail('no velocity')
+		velocity = self._content['velocity']
+		account = self._session['account']
+		stones = inground_db.stone.find({'account': account})
+		stone = stones[stones.count() - 1]
+		if stones.count() == 0 or stone['onground']:
+			return self._response.fail('grab first')
+		(success, location) = inground_map.try_throw(
+			stone['location'],
+			velocity)
+		if success:
+			if stones.count() == 3:
+				changed_area_index = inground_map.invade(account, [
+					s['location'] for s in list(stones)
+				] + [location])
+				print changed_area_index
+				self._enqueue_ground(changed_area_index)
+				inground_db.stone.remove({'account': account})
+			else:
+				inground_db.stone.insert({
+					'account': account,
+					'location': location,
+					'onground': True
+				})
+		return self._response.done('throw', {
+			'success': success,
+			'location': location
+		})
 
 	def _poll(self):
 		for trial in xrange(30):
@@ -231,6 +274,10 @@ class Map:
 
 		self._set('inground', bound_v[0])
 		self._info = self._invade('inground', bound_v + [bound_v[0]])
+		i = 0
+		for v in self._info:
+			self._map[v[0]][v[1]]['index'] = i
+			i = i + 1
 
 	def _get(self, v):
 		return self._map[v[0]][v[1]]['account']
@@ -326,9 +373,23 @@ class Map:
 			self._set(who, v)
 		return initial_area_index
 
+	def try_throw(self, v, d): # v에서 d로 던짐
+		return self._try_throw(self._coord_helper.real2virtual(v), d)
+	def _try_throw(self, v, d):
+		w = [int(v[0] + d[0]), int(v[1] + d[1])] # TODO: 임시 공식임
+		return (w[0] >= 0 and w[0] < self._x and\
+				w[1] >= 0 and w[1] < self._y and\
+				'account' in self._map[w[0]][w[1]],
+				self._coord_helper.virtual2real(w))
+
 	def invade(self, who, path):
-		return self._invade(who, [self._coord_helper.real2virtual(v) for v in path])
+		return [self._map[w[0]][w[1]]['index']
+					for w in self._invade(who,
+										[self._coord_helper.real2virtual(v)
+											for v in path])
+		]
 	def _invade(self, who, path):
+		print path
 		if len(path) < 1:
 			raise ValueError('invalid path')
 
@@ -339,7 +400,9 @@ class Map:
 		self._sem.acquire()
 
 		temp_map = [[self.MINE if 'account' in v and v['account'] == who else self.NONE for v in l] for l in self._map]
+		
 		changed_path = self._path(temp_map, path)
+		
 		changed_area = []
 		q = Queue.Queue()
 		for x in xrange(self._x):
@@ -395,11 +458,8 @@ class Map:
 		if changed_area:
 			changed_area = changed_path + changed_area
 	
-		i = 0
 		for v in changed_area:
 			self._set(who, v)
-			self._map[v[0]][v[1]]['index'] = i
-			i = i + 1
 
 		return changed_area
 

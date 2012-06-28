@@ -10,6 +10,7 @@
 <script type="text/javascript">
 var oMap = null;
 var oMarkerMe = null;
+var oMarkerStone = null;
 var map = [];
 var accounts = [];
 var colors = ['#ff0000', '#0000ff', '#00ff00', '#00ffff', '#ffff00', '#ff00ff'];
@@ -65,21 +66,32 @@ var doMap = function() {
 		// - 따라서 Sprite Icon 을 사용하기 위해 기본적으로 사용되는 값을 지정한다.
 		// - Sprite Icon 을 사용하기 위해서 상세한 내용은 레퍼런스 페이지의 nhn.api.map.SpriteIcon 객체를 참조하면 된다.
 		var testdefaultSpriteIcon = {
-			url : 'http://static.naver.com/maps2/icons/pin_spot2.png',
-			size : {width:28, height:37},
-			spriteSize : {width:28, height:37},
+			url : 'http://static.naver.com/maps2/icons/pin_api2.png',
+			size : {width:19, height:24},
+			spriteSize : {width:190, height:96},
 			imgOrder : 0,
-			offset : {width:14, height:37}
+			offset : {width:10, height:24}
 		};
 		// - 위에서 지정한 기본값을 이용해 실제로 SpriteIcon 을 생성한다.
 		var testDupSpriteIcon_first = new nhn.api.map.SpriteIcon(testdefaultSpriteIcon.url, testdefaultSpriteIcon.size, testdefaultSpriteIcon.spriteSize, 0, testdefaultSpriteIcon.offset);
 		oMarkerMe = new nhn.api.map.DraggableMarker(testDupSpriteIcon_first, {
 			title : 'me',
 			point : oMap.getCenter(),
-			zIndex : 1,
+			zIndex : 2,
 			smallSrc : testDupSpriteIcon_first
 		});
 		oMap.addOverlay(oMarkerMe);
+
+		var oSize = new nhn.api.map.Size(28, 37);
+		var oOffset = new nhn.api.map.Size(14, 37);
+		var oIcon = new nhn.api.map.Icon('http://static.naver.com/maps2/icons/pin_spot2.png', oSize, oOffset);
+		oMarkerStone = new nhn.api.map.Marker(oIcon, {
+			title : 'stone',
+			point: oMap.getCenter(),
+			zIndex : 1,
+			smallSrc : oIcon
+		});
+		oMap.addOverlay(oMarkerStone);
 
 		map = [];
 		for(var i = 0; i < data.map.length; i++) {
@@ -125,19 +137,42 @@ var doStart = function() {
 	});
 };
 var doGrab = function() {
+	var p = oMarkerMe.getPoint();
 	$.ajax({
 		type: 'POST',
 		url: url,
 		dataType: 'json',
 		data: JSON.stringify({
 			kind: 'grab',
-			location: [oMarkerMe.getPoint().getY(), oMarkerMe.getPoint().getX()]
+			location: [p.getY(), p.getX()]
 		})
 	}).done(function(data) {
 		alert('grab : ' + data.success);
+		if(data.success) {
+			oMarkerStone.setPoint(p);
+		}
 	}).fail(function(xhr) {
 		var json = $.parseJSON(xhr.responseText);
 		alert('grab fail : ' + json.message);
+	});
+};
+var doThrow = function() {
+	$.ajax({
+		type: 'POST',
+		url: url,
+		dataType: 'json',
+		data: JSON.stringify({
+			kind: 'throw',
+			velocity: [Number($('#latitude').attr('value')), Number($('#longitude').attr('value'))]
+		})
+	}).done(function(data) {
+		alert('throw : ' + data.success);
+		if(data.success) {
+			oMarkerStone.setPoint(new nhn.api.map.LatLng(data.location[0], data.location[1]));
+		}
+	}).fail(function(xhr) {
+		var json = $.parseJSON(xhr.responseText);
+		alert('throw fail : ' + json.message);
 	});
 };
 var doPoll = function() {
@@ -176,6 +211,7 @@ $(document).ready(function() {
 	$('#bMap').click(doMap);
 	$('#bStart').click(doStart);
 	$('#bGrab').click(doGrab);
+	$('#bThrow').click(doThrow);
 });
 </script>
 <input id="account" type="text" />
@@ -183,6 +219,8 @@ $(document).ready(function() {
 <button id="bMap" type="button">map</button>
 <button id="bStart" type="button">start</button>
 <button id="bGrab" type="button">grab</button>
+(<input id="latitude" type="text" />, <input id="longitude" type="text" />)
+<button id="bThrow" type="button">throw</button>
 <div id="map"></div>
 </body>
 </html>
