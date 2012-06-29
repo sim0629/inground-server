@@ -273,10 +273,9 @@ class Map:
 
 		# Constants
 		self.NONE = 0
-		self.MINE = 1
+		self.MINE = 10 # 제일 커야 함
 		self.PATH = 2
 		self.FLAG = 3
-
 
 		self._coord_helper = CoordHelper(bound)
 		
@@ -284,7 +283,7 @@ class Map:
 		self._x = max([v[0] for v in bound_v]) + 1
 		self._y = max([v[1] for v in bound_v]) + 1
 		
-		self._map = [[{} for y in xrange(self._y)] for x in xrange(self._x)]
+		self._map = [[{'index':-1, 'account':''} for y in xrange(self._y)] for x in xrange(self._x)]
 
 		self._nofcells = {}
 		self._set('inground', bound_v[0])
@@ -302,7 +301,7 @@ class Map:
 		if who not in self._nofcells:
 			self._nofcells[who] = 0
 		cell = self._map[v[0]][v[1]]
-		if 'account' in cell:
+		if cell['account']:
 			prev_who = cell['account']
 			self._nofcells[prev_who] = self._nofcells[prev_who] - 1
 		cell['account'] = who
@@ -375,8 +374,6 @@ class Map:
 				self._coord_helper.real2virtual(w)
 
 	def is_finished(self):
-		print self._nofcells
-		print self._totalcells
 		return float(self._nofcells['inground']) / self._totalcells < 0.4
 	
 	def get_result(self):
@@ -415,7 +412,7 @@ class Map:
 		w = [int(v[0] + d[0]), int(v[1] + d[1])] # TODO: 임시 공식임
 		return (w[0] >= 0 and w[0] < self._x and\
 				w[1] >= 0 and w[1] < self._y and\
-				'account' in self._map[w[0]][w[1]],
+				self._map[w[0]][w[1]]['index'] >= 0,
 				self._coord_helper.virtual2real(w))
 
 	def invade(self, who, path):
@@ -432,8 +429,32 @@ class Map:
 			self._get(path[-1]) != who:
 			return []
 
-		temp_map = [[self.MINE if 'account' in v and v['account'] == who else self.NONE for v in l] for l in self._map]
-		
+		temp_map = [[self.NONE for v in l] for l in self._map]
+	
+		mine_plus = 0
+		q = Queue.Queue()
+		for x in xrange(self._x):
+			for y in xrange(self._y):
+				if self._get([x, y]) == who and temp_map[x][y] == self.NONE:
+					q.put([x, y])
+					while not q.empty():
+						v = q.get()
+						if v[0] < 0 or v[0] >= self._x or\
+							v[1] < 0 or v[1] >= self._y or\
+							self._get([v[0], v[1]]) != who or\
+							temp_map[v[0]][v[1]] != self.NONE:
+							continue
+						temp_map[v[0]][v[1]] = self.MINE + mine_plus
+						q.put([v[0] - 1, v[1]])
+						q.put([v[0] + 1, v[1]])
+						q.put([v[0], v[1] + 1])
+						q.put([v[0], v[1] - 1])
+					mine_plus = mine_plus + 1
+
+		if temp_map[path[0][0]][path[0][1]] !=\
+			temp_map[path[-1][0]][path[-1][1]]:
+			return []
+
 		changed_path = self._path(temp_map, path)
 		
 		changed_area = []
@@ -486,9 +507,8 @@ class Map:
 					if not is_outside:
 						changed_area = changed_area + flagged
 
-		if changed_area:
-			changed_area = changed_path + changed_area
-	
+		changed_area = changed_path + changed_area
+
 		for v in changed_area:
 			self._set(who, v)
 
