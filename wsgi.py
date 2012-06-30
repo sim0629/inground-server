@@ -98,7 +98,7 @@ class Inground:
 				}
 			})
 
-	def _enqueue_finish(self, area_index):
+	def _enqueue_finish(self):
 		sessions = inground_db.session.find()
 		for session in sessions:
 			account = session['account']
@@ -172,10 +172,13 @@ class Inground:
 				changed_area_index = inground_map.invade(account, [
 					s['location'] for s in list(stones)
 				] + [location])
-				self._enqueue_ground(changed_area_index)
-				inground_db.stone.remove({'account': account})
-				if inground_map.is_finished():
-					self._enqueue_finish()
+				if changed_area_index:
+					self._enqueue_ground(changed_area_index)
+					inground_db.stone.remove({'account': account})
+					if inground_map.is_finished():
+						self._enqueue_finish()
+				else:
+					success = False
 				inground_semaphore.release()
 			else:
 				inground_db.stone.insert({
@@ -416,11 +419,13 @@ class Map:
 				self._coord_helper.virtual2real(w))
 
 	def invade(self, who, path):
-		return [self._map[w[0]][w[1]]['index']
-					for w in self._invade(who,
-										[self._coord_helper.real2virtual(v)
-											for v in path])
-		]
+		valid_changed_area_index = []
+		for w in self._invade(who,
+			[self._coord_helper.real2virtual(v) for v in path]):
+			i = self._map[w[0]][w[1]]['index']
+			if i >= 0:
+				valid_changed_area_index.append(i)
+		return valid_changed_area_index
 	def _invade(self, who, path):
 		if len(path) < 1:
 			raise ValueError('invalid path')
