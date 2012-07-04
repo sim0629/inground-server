@@ -186,6 +186,8 @@ class Inground:
 					'location': location,
 					'onground': True
 				})
+		if not success: # else로 하면 안 됨
+			inground_db.stone.remove({'account': account})
 		return self._response.done('throw', {
 			'success': success,
 			'location': location
