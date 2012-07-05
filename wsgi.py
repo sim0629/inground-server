@@ -338,6 +338,17 @@ class Map:
 
 		changed = []
 
+		x = from_v[X]
+		y = from_v[Y]
+		if by_x:
+			if temp_map[x][y] == self.NONE:
+				temp_map[x][y] = self.PATH
+				changed.append([x, y])
+		else:
+			if temp_map[y][x] == self.NONE:
+				temp_map[y][x] = self.PATH
+				changed.append([y, x])
+
 		p = 2 * dy - dx
 		x = from_v[X] + 1
 		y = from_v[Y]
