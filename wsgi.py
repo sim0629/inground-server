@@ -160,9 +160,9 @@ class Inground:
 		velocity = self._content['velocity']
 		account = self._session['account']
 		stones = inground_db.stone.find({'account': account})
-		stone = stones[stones.count() - 1]
-		if stones.count() == 0 or stone['onground']:
+		if stones.count() == 0 or stones[stones.count() - 1]['onground']:
 			return self._response.fail('grab first')
+		stone = stones[stones.count() - 1]
 		(success, location) = inground_map.try_throw(
 			stone['location'],
 			velocity)
