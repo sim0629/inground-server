@@ -1,8 +1,8 @@
 # coding: utf-8
 
 import Cookie
-import gevent.coros
 import gevent.monkey; gevent.monkey.patch_all()
+import gevent.coros
 import gevent.pywsgi
 import json
 import math
@@ -226,6 +226,8 @@ class Inground:
 			sessions = inground_db.session.find({'session_id': session_id})
 			if sessions.count() > 0:
 				self._session = sessions[0]
+
+		print(kind)
 
 		if self._session is None:
 			if kind == 'login':
@@ -544,9 +546,14 @@ inground_map_dict = {
 		[37.89059317817402, 127.74743020534515],
 		[37.889062745563606, 127.7475294470787],
 		[37.88906062876063, 127.74594157934189]
+	],
+	'home' : [
+		[37.88077711276743, 127.75196582078934],
+		[37.88113065778504, 127.75423228740692],
+		[37.87977151137296, 127.75304943323135]
 	]
 }
-inground_map = Map(inground_map_dict['cds'])
+inground_map = Map(inground_map_dict['home'])
 inground_semaphore = gevent.coros.BoundedSemaphore()
 
 if __name__ == '__main__':
