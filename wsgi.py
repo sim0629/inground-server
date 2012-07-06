@@ -427,7 +427,22 @@ class Map:
 	def try_throw(self, v, d): # v에서 d로 던짐
 		return self._try_throw(self._coord_helper.real2virtual(v), d)
 	def _try_throw(self, v, d):
-		w = [int(v[0] + d[0]), int(v[1] + d[1])] # TODO: 임시 공식임
+		BIAS = 5.
+		MIN = 3.
+		MAX = 15.
+
+		x = d[0] / BIAS
+		y = d[1] / BIAS
+
+		sos = x * x + y * y
+		if sos < MIN * MIN:
+			return (False, self._coord_helper.virtual2real(v))
+		elif sos > MAX * MAX:
+			rsos = sos ** 0.5
+			x = x * MAX / rsos
+			y = y * MAX / rsos
+
+		w = [int(v[0] + x), int(v[1] + y)]
 		return (w[0] >= 0 and w[0] < self._x and\
 				w[1] >= 0 and w[1] < self._y and\
 				self._map[w[0]][w[1]]['index'] >= 0,
