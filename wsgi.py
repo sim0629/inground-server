@@ -388,11 +388,15 @@ class Map:
 		return self._get(v) == who
 	
 	def is_same(self, v, w):
-		return self._coord_helper.real2virtual(v) ==\
-				self._coord_helper.real2virtual(w)
+		LEN = 3
+		a = self._coord_helper.real2virtual(v)
+		b = self._coord_helper.real2virtual(w)
+		print a
+		print b
+		return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < LEN ** 2
 
 	def is_finished(self):
-		return float(self._nofcells['inground']) / self._totalcells < 0.4
+		return float(self._nofcells['inground']) / self._totalcells < 0.7
 	
 	def get_result(self):
 		result = []
@@ -427,16 +431,20 @@ class Map:
 	def try_throw(self, v, d): # v에서 d로 던짐
 		return self._try_throw(self._coord_helper.real2virtual(v), d)
 	def _try_throw(self, v, d):
-		BIAS = 5.
+		BIAS = 50.
 		MIN = 3.
-		MAX = 15.
+		MAX = 10.
 
 		x = d[0] / BIAS
 		y = d[1] / BIAS
 
 		sos = x * x + y * y
-		if sos < MIN * MIN:
+		if sos == 0:
 			return (False, self._coord_helper.virtual2real(v))
+		if sos < MIN * MIN:
+			rsos = sos ** 0.5
+			x = x * MIN / rsos
+			y = y * MIN / rsos
 		elif sos > MAX * MAX:
 			rsos = sos ** 0.5
 			x = x * MAX / rsos
@@ -579,7 +587,7 @@ inground_map_dict = {
 		[37.87977151137296, 127.75304943323135]
 	]
 }
-inground_map = Map(inground_map_dict['home'])
+inground_map = Map(inground_map_dict['snu'])
 inground_semaphore = gevent.coros.BoundedSemaphore()
 
 if __name__ == '__main__':
